@@ -4,7 +4,7 @@ pipeline {
     environment {
         CONTAINER_NAME = 'poll-backend'
         IMAGE_NAME = 'poll-api'
-        NETWORK_NAME = 'poll-network'
+        NETWORK_NAME = 'app-net'
         PORT_MAPPING = '5050:8080' // Using 5050 to avoid conflicts with existing APIs mapping to container port 8080
     }
  
