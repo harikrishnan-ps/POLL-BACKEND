@@ -17,6 +17,13 @@ builder.Services.AddSwaggerGen();
 
 // Database
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+var safeConnectionString = System.Text.RegularExpressions.Regex.Replace(
+    connectionString ?? string.Empty, 
+    @"Password=[^;]*", 
+    "Password=***");
+Console.WriteLine($"[STARTUP] Resolved Connection String: {safeConnectionString}");
+
 var serverVersion = new MySqlServerVersion(new Version(8, 0, 36));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
