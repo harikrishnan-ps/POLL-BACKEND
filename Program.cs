@@ -17,8 +17,16 @@ builder.Services.AddSwaggerGen();
 
 // Database
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var serverVersion = new MySqlServerVersion(new Version(8, 0, 36));
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    options.UseMySql(connectionString, serverVersion, mySqlOptions =>
+    {
+        mySqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 10,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+    }));
 
 // Repositories
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
@@ -86,8 +94,32 @@ app.MapControllers();
 // Auto-migrate database on startup
 using (var scope = app.Services.CreateScope())
 {
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    
+    var maxRetries = 10;
+    var retryDelay = TimeSpan.FromSeconds(5);
+    
+    for (int i = 0; i < maxRetries; i++)
+    {
+        try
+        {
+            logger.LogInformation("Attempting to connect to the database and apply migrations... (Attempt {Attempt}/{MaxRetries})", i + 1, maxRetries);
+            db.Database.Migrate();
+            logger.LogInformation("Database migrations applied successfully.");
+            break;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while migrating the database on attempt {Attempt}.", i + 1);
+            if (i == maxRetries - 1)
+            {
+                logger.LogCritical("Could not connect to the database after {MaxRetries} attempts. Application startup will fail.", maxRetries);
+                throw;
+            }
+            Thread.Sleep(retryDelay);
+        }
+    }
 }
 
 app.Run();
